@@ -68,7 +68,15 @@ def get_args():
     parser.add_argument("--test_batch_size", type=int, default=512)
     parser.add_argument("--num_workers", type=int, default=8)
     parser.add_argument("--test", dest='training', default=True, action='store_false')
-
+#这一片要改
+    parser.add_argument('--theta', type=float, default=1, help='')
+    parser.add_argument('--tau', type=float, default=1, help='')
+    parser.add_argument('--tbu', type=float, default=100, help='')
+    parser.add_argument("--gammb", type=float, default=1.65)
+    parser.add_argument("--gammk", type=float, default=0.0001)
+    parser.add_argument("--gaeta", type=float, default=1)
+    parser.add_argument('--modulation', action='store_true', default=True, help='Enables grad modulation')
+#======
     args = parser.parse_args()
 
     return args

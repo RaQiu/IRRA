@@ -597,5 +597,3 @@ def build_CLIP_from_openai_pretrained(name: str, image_size: Union[int, Tuple[in
     # resize modified pos embedding
     model.load_param(state_dict)
     return model, model_cfg
-
-

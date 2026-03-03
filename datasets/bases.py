@@ -153,7 +153,7 @@ class ImageTextMLMDataset(Dataset):
             img = self.transform(img)
         
         caption_tokens = tokenize(caption, tokenizer=self.tokenizer, text_length=self.text_length, truncate=self.truncate)
-
+        
         mlm_tokens, mlm_labels = self._build_random_masked_tokens_and_labels(caption_tokens.cpu().numpy())
 
         ret = {
