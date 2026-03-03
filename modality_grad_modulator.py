@@ -141,9 +141,9 @@ class ModalityGradModulator:
         self._diff: Dict[str, torch.Tensor] = {}
         self._last: Dict[str, torch.Tensor] = {}
 
-        # ---- Loss accumulators ----
-        self._delta_img_loss: float = 0.0
-        self._delta_txt_loss: float = 0.0
+        # ---- Loss accumulators (int 0 matches original global var init) ----
+        self._delta_img_loss = 0
+        self._delta_txt_loss = 0
         self._tot: int = 0
         self._times: int = 0
 
@@ -368,10 +368,11 @@ class ModalityGradModulator:
 
         cfg = self.config
 
-        # Accumulate loss deltas
-        _to_float = lambda v: v.item() if torch.is_tensor(v) else float(v)
-        self._delta_img_loss += _to_float(e_img_loss) - _to_float(all_loss)
-        self._delta_txt_loss += _to_float(e_txt_loss) - _to_float(all_loss)
+        # Accumulate loss deltas (keep as tensors for float32 precision parity
+        # with the original code, which accumulates CUDA tensors directly)
+        _ensure_tensor = lambda v: v if torch.is_tensor(v) else torch.tensor(v, device="cuda")
+        self._delta_img_loss = self._delta_img_loss + (_ensure_tensor(e_img_loss) - _ensure_tensor(all_loss))
+        self._delta_txt_loss = self._delta_txt_loss + (_ensure_tensor(e_txt_loss) - _ensure_tensor(all_loss))
         self._tot += 1
 
         with torch.no_grad():
@@ -543,8 +544,8 @@ class ModalityGradModulator:
                             param.grad *= (1 - iscore_txt)
 
                 # Reset loss accumulators
-                self._delta_img_loss = 0.0
-                self._delta_txt_loss = 0.0
+                self._delta_img_loss = 0
+                self._delta_txt_loss = 0
                 self._tot = 0
 
         # Cleanup
@@ -579,13 +580,14 @@ class ModalityGradModulator:
             dist.all_reduce(self._diff[name], op=dist.ReduceOp.SUM)
 
         # Sync loss deltas and tot (pack into a single tensor for efficiency)
+        _val = lambda v: v.item() if torch.is_tensor(v) else float(v)
         sync_buf = torch.tensor(
-            [self._delta_txt_loss, self._delta_img_loss, float(self._tot)],
+            [_val(self._delta_txt_loss), _val(self._delta_img_loss), float(self._tot)],
             device="cuda",
         )
         dist.all_reduce(sync_buf, op=dist.ReduceOp.SUM)
-        self._delta_txt_loss = sync_buf[0].item()
-        self._delta_img_loss = sync_buf[1].item()
+        self._delta_txt_loss = sync_buf[0]  # keep as tensor
+        self._delta_img_loss = sync_buf[1]
         self._tot = int(sync_buf[2].item())
 
         logger.debug("Synced modulation state across %d GPUs", world_size)
